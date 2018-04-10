@@ -104,7 +104,7 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :param correct_label: TF Placeholder for the correct label image
     :param learning_rate: TF Placeholder for the learning rate
     :param num_classes: Number of classes to classify
-    :return: Tuple of (logits, train_op, loss)
+    :return: Tuple of (logits, train_op, loss, accuracy)
     """
     
     logits = tf.reshape(nn_last_layer, (-1, num_classes), name='logits')
@@ -141,6 +141,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn,
     :param get_batches_fn: Function to get batches of training data.  Call using get_batches_fn(batch_size)
     :param train_op: TF Operation to train the neural network
     :param loss: TF Tensor for the amount of loss
+    :param accuracy: TF Tensor for accuracy
     :param input_image: TF Placeholder for input images
     :param correct_label: TF Placeholder for label images
     :param keep_prob: TF Placeholder for dropout keep probability

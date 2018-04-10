@@ -1,4 +1,9 @@
 # Semantic Segmentation
+
+### Project writeup
+
+Please find the writeup [here](doc/PROJECT_WRITEUP.md).
+
 ### Introduction
 In this project, you'll label the pixels of a road in images using a Fully Convolutional Network (FCN).
 
