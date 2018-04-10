@@ -105,7 +105,7 @@ def gen_batch_function(data_folder, image_shape):
     return get_batches_fn
 
 
-def annotate_image(sess, logits, keep_prob, image_pl, image, tempfilename=None):
+def annotate_image(sess, logits, keep_prob, image_pl, image, debug_filename=None):
     image_shape = image.shape
 
     softmax_top_1 = tf.nn.top_k(tf.nn.softmax(logits), 1)
@@ -117,21 +117,13 @@ def annotate_image(sess, logits, keep_prob, image_pl, image, tempfilename=None):
     main_road = (predictions == 2)
     secondary_road = (predictions == 1)
 
+    if debug_filename is not None and np.count_nonzero(secondary_road) > 0:
+        print('found secondary road', np.count_nonzero(secondary_road), debug_filename)
+
     main_road_mask = np.dot(main_road, np.array([[0, 255, 0, 127]])) # green
     secondary_road_mask = np.dot(secondary_road, np.array([[255, 127, 0, 127]])) # orange
 
-    if np.count_nonzero(secondary_road) > 0:
-        print('found secondary road', np.count_nonzero(secondary_road), tempfilename)
-
-
     street_im = scipy.misc.toimage(image)
-
-    # mask = scipy.misc.toimage(mask, mode="RGBA")
-    # street_im.paste(mask, box=None, mask=mask)
-
-    # mask = np.dot(secondary_road, np.array([[255, 127, 0, 127]])) # orange
-    # mask = scipy.misc.toimage(mask, mode="RGBA")
-    # street_im.paste(mask, box=None, mask=mask)
 
     for mask in [main_road_mask, secondary_road_mask]:
         mask = scipy.misc.toimage(mask, mode="RGBA")

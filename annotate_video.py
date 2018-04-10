@@ -20,14 +20,9 @@ def main(sess_path, path_in, path_out):
             ])
         print(logits, keep_prob, image_input)
 
-        # image_shape = (160, 576)
-        # image_shape = (144, 256)
         image_shape = (int(720*2/5), int(1280*2/5))
         def pipeline(img_in):
-            print('before reshape', img_in.shape)
             img_in = scipy.misc.imresize(img_in, image_shape)
-            # img_in.reshape(image_shape + (-1,))
-            print('after reshape', img_in.shape)
             return annotate_image(sess, logits, keep_prob, image_input, img_in)
 
         convert_video(pipeline, path_in, path_out)

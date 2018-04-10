@@ -143,12 +143,18 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
     
     sess.run(tf.global_variables_initializer())
 
+    learning_rates = [2e-4, 1e-4, 3e-5]
+    learning_rate_cutoff_losses = [0.12, 0.09]
+
     saver_dir_parent = f"saved_sessions/{time.strftime('%Y-%m-%dT%H-%M-%S')}"
     saver_dir_best = ''
     best_loss = sys.float_info.max
 
-    for epoch in range(epochs):
+    for epoch_ind in range(epochs):
+        epoch_num = epoch_ind + 1
+
         loss_value = sys.float_info.max
+
         for train_images, label_images in get_batches_fn(batch_size):
             _, loss_value = sess.run([
                     train_op,
@@ -157,11 +163,15 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
                     input_image: train_images,
                     correct_label: label_images,
                     keep_prob: 0.5,
-                    learning_rate: 0.0002
+                    learning_rate: learning_rates[0]
                 })
 
+        if len(learning_rate_cutoff_losses) > 0 and loss_value < learning_rate_cutoff_losses[0]:
+            learning_rate_cutoff_losses = learning_rate_cutoff_losses[1:]
+            learning_rates = learning_rates[1:]
+
         if saver is not None and loss_value < best_loss:
-            saver_dir = f"{saver_dir_parent}/epoch{epoch}"
+            saver_dir = f"{saver_dir_parent}/epoch{epoch_num}"
             saver_path = f"{saver_dir}/model"
             os.makedirs(saver_dir)
             saver.save(sess, saver_path)
@@ -170,7 +180,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
                 rmtree(saver_dir_best)
             saver_dir_best = saver_dir
             best_loss = loss_value
-        print(f"loss after {epoch} epochs was {loss_value}")
+        print(f"after {epoch_num} epochs, loss was {loss_value}")
 tests.test_train_nn(train_nn)
 
 
@@ -231,6 +241,7 @@ def run():
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
+    # (Did not do this.)
 
     with tf.Session() as sess:
         # Path to vgg model
@@ -241,6 +252,7 @@ def run():
         
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
+        # (Did not do this.)
 
         # Build NN using load_vgg, layers, and optimize function
         tensor_input, tensor_keep_prob, tensor_layer3, tensor_layer4, tensor_layer7 = load_vgg(sess, vgg_path)
@@ -267,7 +279,7 @@ def run():
         
         # Train NN using the train_nn function
         train_nn(
-            sess, 10, 10, get_batches_fn,
+            sess, 15, 10, get_batches_fn,
             train_op, tensor_loss,
             tensor_input, tensor_correct_label,
             tensor_keep_prob, tensor_learning_rate,
