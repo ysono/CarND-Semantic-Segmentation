@@ -120,7 +120,7 @@ def test_train_nn(train_nn):
         return np.arange(np.prod(shape)).reshape(shape)
 
     train_op = tf.constant(0)
-    cross_entropy_loss = tf.constant(10.11)
+    loss = tf.constant(10.11)
     input_image = tf.placeholder(tf.float32, name='input_image')
     correct_label = tf.placeholder(tf.float32, name='correct_label')
     keep_prob = tf.placeholder(tf.float32, name='keep_prob')
@@ -132,7 +132,7 @@ def test_train_nn(train_nn):
             'batch_size': batch_size,
             'get_batches_fn': get_batches_fn,
             'train_op': train_op,
-            'cross_entropy_loss': cross_entropy_loss,
+            'loss': loss,
             'input_image': input_image,
             'correct_label': correct_label,
             'keep_prob': keep_prob,

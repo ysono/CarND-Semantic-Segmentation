@@ -1,4 +1,7 @@
 import os.path
+from shutil import rmtree
+import sys
+import time
 import tensorflow as tf
 import helper
 import warnings
@@ -53,43 +56,42 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     encoder7_conv1x1 = tf.layers.conv2d(
         vgg_layer7_out, num_classes,
         1, strides=(1, 1), padding='same',
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4),
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001),
         name='encoder7_conv1x1')
 
     upsampled_for_decoder4 = tf.layers.conv2d_transpose(
         encoder7_conv1x1, num_classes,
         4, strides=(2, 2), padding='same', # upsample spatial dimensions by 2x
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4))
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
 
     encoder4_conv1x1 = tf.layers.conv2d(
         vgg_layer4_out, num_classes,
         1, strides=(1, 1), padding='same',
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4))
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)
+        )
 
     decoder4 = tf.add(upsampled_for_decoder4, encoder4_conv1x1, name='decoder4')
 
     upsampled_for_decoder3 = tf.layers.conv2d_transpose(
         decoder4, num_classes,
         4, strides=(2, 2), padding='same', # upsample spatial dimensions by 2x
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4))
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
 
     encoder3_conv1x1 = tf.layers.conv2d(
         vgg_layer3_out, num_classes,
         1, strides=(1, 1), padding='same',
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4))
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)
+        )
 
     decoder3 = tf.add(upsampled_for_decoder3, encoder3_conv1x1, name='decoder3')
 
     decoder1 = tf.layers.conv2d_transpose(
         decoder3, num_classes,
         16, strides=(8, 8), padding='same', # upsample spatial dimensions by 8x
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1),
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-4))
+        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
 
     return decoder1
 tests.test_layers(layers)
@@ -102,25 +104,29 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :param correct_label: TF Placeholder for the correct label image
     :param learning_rate: TF Placeholder for the learning rate
     :param num_classes: Number of classes to classify
-    :return: Tuple of (logits, train_op, cross_entropy_loss)
+    :return: Tuple of (logits, train_op, loss)
     """
     
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
 
     correct_label_reshaped = tf.reshape(correct_label, (-1, num_classes))
 
-    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
         logits=logits, labels=correct_label_reshaped))
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    train_op = optimizer.minimize(cross_entropy_loss)
+    reguralization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    
+    loss = cross_entropy_loss + 0.001 * sum(reguralization_losses)
 
-    return logits, train_op, cross_entropy_loss
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    train_op = optimizer.minimize(loss)
+
+    return logits, train_op, loss
 tests.test_optimize(optimize)
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image,
-             correct_label, keep_prob, learning_rate):
+def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_image,
+             correct_label, keep_prob, learning_rate, saver=None):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -128,32 +134,42 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param batch_size: Batch size
     :param get_batches_fn: Function to get batches of training data.  Call using get_batches_fn(batch_size)
     :param train_op: TF Operation to train the neural network
-    :param cross_entropy_loss: TF Tensor for the amount of loss
+    :param loss: TF Tensor for the amount of loss
     :param input_image: TF Placeholder for input images
     :param correct_label: TF Placeholder for label images
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     """
     
-    # saver = tf.train.Saver()
-
     sess.run(tf.global_variables_initializer())
 
+    saver_dir_parent = f"saved_sessions/{time.strftime('%Y-%m-%dT%H-%M-%S')}"
+    saver_dir_best = ''
+    best_loss = sys.float_info.max
+
     for epoch in range(epochs):
-        cross_entropy_loss_value = -1
+        loss_value = sys.float_info.max
         for train_images, label_images in get_batches_fn(batch_size):
-            _, cross_entropy_loss_value = sess.run([
+            _, loss_value = sess.run([
                     train_op,
-                    cross_entropy_loss
+                    loss
                 ], {
                     input_image: train_images,
                     correct_label: label_images,
                     keep_prob: 0.5,
-                    learning_rate: 1e-1
+                    learning_rate: 0.0001
                 })
 
-        # saver.save(sess, f"epoch{epoch}")
-        print(f"cross entropy loss after {epoch} epochs was {cross_entropy_loss_value}")
+        if saver is not None and loss_value < best_loss:
+            saver_dir = f"{saver_dir_parent}/epoch{epoch}"
+            os.makedirs(saver_dir)
+            saver.save(sess, saver_dir)
+
+            if saver_dir_best != '':
+                rmtree(saver_dir_best)
+            saver_dir_best = saver_dir
+            best_loss = loss_value
+        print(f"loss after {epoch} epochs was {loss_value}")
 tests.test_train_nn(train_nn)
 
 def display_tensor_shapes(
@@ -161,7 +177,7 @@ def display_tensor_shapes(
     tensor_input, tensor_keep_prob, tensor_layer3, tensor_layer4, tensor_layer7,
     tensor_output,
     tensor_correct_label, tensor_learning_rate,
-    tensor_logits, tensor_cross_entropy_loss,
+    tensor_logits,
     get_batches_fn):
     """for debugging"""
 
@@ -196,8 +212,8 @@ def display_tensor_shapes(
         tensors_printer, {
             tensor_input: temp_train_images,
             tensor_correct_label: temp_label_images,
-            tensor_keep_prob: 0.5,  
-            tensor_learning_rate: 1e-1
+            tensor_keep_prob: 99,  
+            tensor_learning_rate: 99
         })
 
 def run():
@@ -231,7 +247,7 @@ def run():
         tensor_correct_label = tf.placeholder(tf.float32, [None, None, None, num_classes])
         tensor_learning_rate = tf.placeholder(tf.float32)
         
-        tensor_logits, train_op, tensor_cross_entropy_loss = \
+        tensor_logits, train_op, tensor_loss = \
             optimize(tensor_output, tensor_correct_label, tensor_learning_rate, num_classes)
 
         # display_tensor_shapes(
@@ -239,18 +255,21 @@ def run():
         #     tensor_input, tensor_keep_prob, tensor_layer3, tensor_layer4, tensor_layer7,
         #     tensor_output,
         #     tensor_correct_label, tensor_learning_rate,
-        #     tensor_logits, tensor_cross_entropy_loss,
+        #     tensor_logits,
         #     get_batches_fn)
+
+        saver = tf.train.Saver()
         
         # Train NN using the train_nn function
         train_nn(
-            sess, 10, 20, get_batches_fn,
-            train_op, tensor_cross_entropy_loss,
+            sess, 10, 10, get_batches_fn,
+            train_op, tensor_loss,
             tensor_input, tensor_correct_label,
-            tensor_keep_prob, tensor_learning_rate)
+            tensor_keep_prob, tensor_learning_rate,
+            saver=saver)
 
         # Save inference data using helper.save_inference_samples
-        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, tensor_logits, tensor_keep_prob, tensor_input)
 
         # OPTIONAL: Apply the trained model to a video
 

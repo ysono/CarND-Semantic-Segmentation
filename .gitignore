@@ -100,4 +100,7 @@ ENV/
 # mypy
 .mypy_cache/
 
-RUNS/
+# project dirs
+runs/
+saved_sessions/
+
