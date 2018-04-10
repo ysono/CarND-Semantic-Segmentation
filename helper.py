@@ -108,17 +108,18 @@ def gen_batch_function(data_folder, image_shape):
 def annotate_image(sess, logits, keep_prob, image_pl, image, debug_filename=None):
     image_shape = image.shape
 
-    softmax_top_1 = tf.nn.top_k(tf.nn.softmax(logits), 1)
-    softmax_top_1_value = sess.run(
-        softmax_top_1,
+    prediction_tensor = tf.argmax(logits, axis=1)
+    prediction = sess.run(
+        prediction_tensor,
         {keep_prob: 1.0, image_pl: [image]})
-    predictions = softmax_top_1_value.indices.reshape(image_shape[0], image_shape[1], 1)
+    prediction = prediction.reshape(image_shape[0], image_shape[1], 1)
 
-    main_road = (predictions == 2)
-    secondary_road = (predictions == 1)
+    main_road = (prediction == 2)
+    secondary_road = (prediction == 1)
 
-    if debug_filename is not None and np.count_nonzero(secondary_road) > 0:
-        print('found secondary road', np.count_nonzero(secondary_road), debug_filename)
+    if debug_filename is not None:
+        print(debug_filename,
+            'num secondary road pixels', np.count_nonzero(secondary_road))
 
     main_road_mask = np.dot(main_road, np.array([[0, 255, 0, 127]])) # green
     secondary_road_mask = np.dot(secondary_road, np.array([[255, 127, 0, 127]])) # orange
@@ -146,7 +147,7 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
     for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
         image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
 
-        annotated = annotate_image(sess, logits, keep_prob, image_pl, image, tempfilename=image_file)
+        annotated = annotate_image(sess, logits, keep_prob, image_pl, image, debug_filename=image_file)
 
         yield os.path.basename(image_file), annotated
 

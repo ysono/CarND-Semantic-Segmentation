@@ -109,10 +109,10 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     
     logits = tf.reshape(nn_last_layer, (-1, num_classes), name='logits')
 
-    correct_label_reshaped = tf.reshape(correct_label, (-1, num_classes))
+    labels = tf.reshape(correct_label, (-1, num_classes))
 
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-        logits=logits, labels=correct_label_reshaped))
+        logits=logits, labels=labels))
 
     reguralization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
     
@@ -121,12 +121,18 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss)
 
-    return logits, train_op, loss
+    correct_prediction = tf.equal(tf.argmax(logits, axis=1), tf.argmax(labels, axis=1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
+
+    return logits, train_op, loss, accuracy
 tests.test_optimize(optimize)
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_image,
-             correct_label, keep_prob, learning_rate, saver=None):
+def train_nn(sess, epochs, batch_size, get_batches_fn,
+             train_op, loss, accuracy,
+             input_image, correct_label,
+             keep_prob, learning_rate,
+             more_tensors=None, saver=None):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -140,7 +146,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     """
-    
+
     sess.run(tf.global_variables_initializer())
 
     learning_rates = [2e-4, 1e-4, 3e-5]
@@ -156,9 +162,10 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
         loss_value = sys.float_info.max
 
         for train_images, label_images in get_batches_fn(batch_size):
-            _, loss_value = sess.run([
+            _, loss_value, accuracy_value = sess.run([
                     train_op,
-                    loss
+                    loss,
+                    accuracy
                 ], {
                     input_image: train_images,
                     correct_label: label_images,
@@ -180,7 +187,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
                 rmtree(saver_dir_best)
             saver_dir_best = saver_dir
             best_loss = loss_value
-        print(f"after {epoch_num} epochs, loss was {loss_value}")
+        print(f"after {epoch_num} epochs, loss was {loss_value}, accuracy {accuracy_value}")
 tests.test_train_nn(train_nn)
 
 
@@ -261,7 +268,7 @@ def run():
         tensor_correct_label = tf.placeholder(tf.float32, [None, None, None, num_classes])
         tensor_learning_rate = tf.placeholder(tf.float32)
         
-        tensor_logits, train_op, tensor_loss = \
+        tensor_logits, train_op, tensor_loss, tensor_accuracy = \
             optimize(tensor_output, tensor_correct_label, tensor_learning_rate, num_classes)
 
         # display_tensor_shapes(
@@ -279,8 +286,8 @@ def run():
         
         # Train NN using the train_nn function
         train_nn(
-            sess, 15, 10, get_batches_fn,
-            train_op, tensor_loss,
+            sess, 10, 10, get_batches_fn,
+            train_op, tensor_loss, tensor_accuracy,
             tensor_input, tensor_correct_label,
             tensor_keep_prob, tensor_learning_rate,
             saver=saver)

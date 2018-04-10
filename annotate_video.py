@@ -1,5 +1,6 @@
 import sys
 from moviepy.editor import VideoFileClip
+import numpy as np
 import scipy.misc
 import tensorflow as tf
 from helper import annotate_image
@@ -10,6 +11,10 @@ def convert_video(pipeline, path_in, path_out):
     clip_out.write_videofile(path_out, audio=False)
 
 def main(sess_path, path_in, path_out):
+    aspect_ratio = np.array([9, 16])
+    min_pow2 = 32 # output height and width each needs to be divisible by this
+    out_resolution = aspect_ratio * min_pow2
+
     with tf.Session() as sess:
         saver = tf.train.import_meta_graph(f"{sess_path}.meta")
         saver.restore(sess, sess_path)
@@ -20,9 +25,8 @@ def main(sess_path, path_in, path_out):
             ])
         print(logits, keep_prob, image_input)
 
-        image_shape = (int(720*2/5), int(1280*2/5))
         def pipeline(img_in):
-            img_in = scipy.misc.imresize(img_in, image_shape)
+            img_in = scipy.misc.imresize(img_in, out_resolution)
             return annotate_image(sess, logits, keep_prob, image_input, img_in)
 
         convert_video(pipeline, path_in, path_out)
