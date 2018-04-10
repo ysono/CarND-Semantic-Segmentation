@@ -107,11 +107,11 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, loss)
     """
     
-    logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    logits = tf.reshape(nn_last_layer, (-1, num_classes), name='logits')
 
     correct_label_reshaped = tf.reshape(correct_label, (-1, num_classes))
 
-    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
         logits=logits, labels=correct_label_reshaped))
 
     reguralization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
@@ -157,13 +157,14 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
                     input_image: train_images,
                     correct_label: label_images,
                     keep_prob: 0.5,
-                    learning_rate: 0.0001
+                    learning_rate: 0.0002
                 })
 
         if saver is not None and loss_value < best_loss:
             saver_dir = f"{saver_dir_parent}/epoch{epoch}"
+            saver_path = f"{saver_dir}/model"
             os.makedirs(saver_dir)
-            saver.save(sess, saver_dir)
+            saver.save(sess, saver_path)
 
             if saver_dir_best != '':
                 rmtree(saver_dir_best)
@@ -171,6 +172,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, loss, input_ima
             best_loss = loss_value
         print(f"loss after {epoch} epochs was {loss_value}")
 tests.test_train_nn(train_nn)
+
 
 def display_tensor_shapes(
     sess,
@@ -216,11 +218,11 @@ def display_tensor_shapes(
             tensor_learning_rate: 99
         })
 
+
 def run():
     num_classes = 2
     image_shape = (160, 576)
     data_dir = './data'
-    runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
 
     # Download pretrained vgg model
@@ -259,19 +261,17 @@ def run():
         #     get_batches_fn)
 
         saver = tf.train.Saver()
+        tf.add_to_collection('image_input', tensor_input)
+        tf.add_to_collection('keep_prob', tensor_keep_prob)
+        tf.add_to_collection('logits', tensor_logits)
         
         # Train NN using the train_nn function
         train_nn(
-            sess, 10, 10, get_batches_fn,
+            sess, 1, 10, get_batches_fn,
             train_op, tensor_loss,
             tensor_input, tensor_correct_label,
             tensor_keep_prob, tensor_learning_rate,
             saver=saver)
-
-        # Save inference data using helper.save_inference_samples
-        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, tensor_logits, tensor_keep_prob, tensor_input)
-
-        # OPTIONAL: Apply the trained model to a video
 
 
 if __name__ == '__main__':

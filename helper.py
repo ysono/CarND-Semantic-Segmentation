@@ -98,6 +98,29 @@ def gen_batch_function(data_folder, image_shape):
     return get_batches_fn
 
 
+def annotate_image(sess, logits, keep_prob, image_pl, image):
+    image_shape = image.shape
+
+    im_softmax = sess.run(
+        [tf.nn.softmax(logits)],
+        {keep_prob: 1.0, image_pl: [image]})
+    # im_softmax = im_softmax[0][:, 1].reshape(image_shape[0], image_shape[1])
+    # segmentation = (im_softmax > 0.5).reshape(image_shape[0], image_shape[1], 1)
+    im_softmax = im_softmax[0][:, 1]
+    segmentation = (im_softmax > 0.5).reshape(image_shape[0], image_shape[1], 1)
+    print('annotated shapes', im_softmax.shape, segmentation.shape)
+
+    # im_softmax = im_softmax.reshape(image_shape[:2])
+    # segmentation = segmentation.reshape(image_shape[0], image_shape[1], 1)
+    # print('annotated shapes, post-resize', im_softmax.shape, segmentation.shape)
+
+    mask = np.dot(segmentation, np.array([[0, 255, 0, 127]]))
+    mask = scipy.misc.toimage(mask, mode="RGBA")
+    street_im = scipy.misc.toimage(image)
+    street_im.paste(mask, box=None, mask=mask)
+    return np.array(street_im)
+
+
 def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape):
     """
     Generate test output using the test images
@@ -112,22 +135,14 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
     for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
         image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
 
-        im_softmax = sess.run(
-            [tf.nn.softmax(logits)],
-            {keep_prob: 1.0, image_pl: [image]})
-        im_softmax = im_softmax[0][:, 1].reshape(image_shape[0], image_shape[1])
-        segmentation = (im_softmax > 0.5).reshape(image_shape[0], image_shape[1], 1)
-        mask = np.dot(segmentation, np.array([[0, 255, 0, 127]]))
-        mask = scipy.misc.toimage(mask, mode="RGBA")
-        street_im = scipy.misc.toimage(image)
-        street_im.paste(mask, box=None, mask=mask)
+        annotated = annotate_image(sess, logits, keep_prob, image_pl, image)
 
-        yield os.path.basename(image_file), np.array(street_im)
+        yield os.path.basename(image_file), annotated
 
 
 def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image):
     # Make folder for current run
-    output_dir = os.path.join(runs_dir, str(time.time()))
+    output_dir = os.path.join(runs_dir, time.strftime('%Y-%m-%dT%H-%M-%S'))
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
