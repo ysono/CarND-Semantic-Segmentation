@@ -15,7 +15,6 @@ def main(sess_path, path_in, path_out):
         saver.restore(sess, sess_path)
 
         logits, keep_prob, image_input = (
-            # graph.get_tensor_by_name(n) for n in [
             tf.get_collection(n)[0] for n in [
                 'logits', 'keep_prob', 'image_input'
             ])

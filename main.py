@@ -220,7 +220,7 @@ def display_tensor_shapes(
 
 
 def run():
-    num_classes = 2
+    num_classes = 3
     image_shape = (160, 576)
     data_dir = './data'
     tests.test_for_kitti_dataset(data_dir)
@@ -267,7 +267,7 @@ def run():
         
         # Train NN using the train_nn function
         train_nn(
-            sess, 1, 10, get_batches_fn,
+            sess, 10, 10, get_batches_fn,
             train_op, tensor_loss,
             tensor_input, tensor_correct_label,
             tensor_keep_prob, tensor_learning_rate,
